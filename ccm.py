@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from optparse import OptionParser
 from StringIO import StringIO
 from subprocess import CalledProcessError
@@ -39,6 +40,9 @@ def main():
         update_cookbooks()
     elif options.purge:
         purge_cookbooks()
+    else:
+        print "%sPlease supply a valid argument%s" % (RED, END,)
+        parser.print_help()
 
 def create_manifest(folder):
     """
