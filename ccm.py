@@ -68,7 +68,7 @@ def create_manifest(folder):
 
         try:
             f = open('ccm.json', 'w')
-            f.write(json.dumps(manifest))
+            f.write(json.dumps(manifest, indent=4, sort_keys=True))
         except:
             print "%sUnable to write ccm.json%s" % (RED, END,)
             sys.exit()
