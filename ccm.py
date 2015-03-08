@@ -1,4 +1,24 @@
 #!/usr/bin/python
+
+"""
+Copyright (c) 2015 David Exelby
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
 from optparse import OptionParser
 from StringIO import StringIO
 from subprocess import CalledProcessError
@@ -9,9 +29,14 @@ import os
 import json
 import sys
 
-GREEN = '\033[92m'
-RED = '\033[91m'
-END = '\033[0m'
+if sys.platform != 'win32':
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    END = '\033[0m'
+else:
+    GREEN = ''
+    RED = ''
+    END = ''
 
 class CCMExceptpion(Exception):
     pass
@@ -24,7 +49,10 @@ def main():
     parser.add_option("-i", "--install", action="store_true", dest="install",
                       help="installs chef cookbooks definded in ccm.json.")
     parser.add_option("-u", "--update", action="store_true", dest="update",
-                      help="pulls latest version of cookbook repo for each "\
+                      help="updates the cookbook repos to the commit hash "\
+                           "defined in ccm.json.")
+    parser.add_option("-f", "--force-update", action="store_true", dest="force_update",
+                      help="pulls the latest version of cookbook repo for each "\
                            "cookbook in manifest.")
     parser.add_option("-p", "--purge", action="store_true", dest="purge",
                       help="deletes chef cookbooks that are not listed in the "\
@@ -33,11 +61,13 @@ def main():
     (options, args) = parser.parse_args()
 
     if options.snapshot:
-        snaphsot_manifest(options.create)
+        snaphsot_manifest(options.snapshot)
     elif options.install:
-        update_cookbooks()
+        update_cookbooks(False)
     elif options.update:
-        update_cookbooks()
+        update_cookbooks(False)
+    elif options.force_update:
+        update_cookbooks(True)
     elif options.purge:
         purge_cookbooks()
     else:
@@ -49,11 +79,6 @@ def snaphsot_manifest(folder):
     snapshot a cookbook manifest containg name, repo url and
     commit id each cookbook used.
     """
-
-    #snapshot cookbook with commit id which will be used for git clone
-        #when git update is run update all repos but do not write ccm.json
-        #rollback cookbooks to version in ccm.json
-
     folder = folder.strip('/')
 
     if not os.path.exists(folder):
@@ -67,9 +92,12 @@ def snaphsot_manifest(folder):
             git_config_path = '%s/%s/.git/config' % (folder, dirs,)
             if os.path.exists(folder):
                 repo_url = get_repo_url(git_config_path)
-                if repo_url:
+                commit_hash = subprocess.check_output(['git', 'rev-parse', '--verify', 'HEAD'],
+                    cwd='%s/%s/' % (folder,dirs,))
+                if repo_url and commit_hash:
                     manifest['cookbooks'].append({'install_path': dirs,
-                                                  'repo_url': repo_url})
+                                                  'repo_url': repo_url,
+                                                  'commit_hash': commit_hash.strip()})
 
         try:
             f = open('ccm.json', 'w')
@@ -78,7 +106,7 @@ def snaphsot_manifest(folder):
             print "%sUnable to write ccm.json%s" % (RED, END,)
             sys.exit()
 
-def update_cookbooks():
+def update_cookbooks(force_update):
     """
     runs git pull/clone for each cookbook in the manifest
     """
@@ -92,13 +120,17 @@ def update_cookbooks():
             with open(os.devnull, "w") as f:
                 if os.path.exists(path):
                     message = 'Updating'
-                    subprocess.check_call(["git", "pull"], cwd=path, stdout=f, stderr=f)
+                    subprocess.check_call(["git", "pull"],
+                        cwd=path, stdout=f, stderr=f)
                 else:
                     message = 'Cloning'
                     os.mkdir(path)
-                    subprocess.check_call(["git", "clone",
-                                           cookbook['repo_url'], "."],
-                                           cwd=path, stdout=f, stderr=f)
+                    subprocess.check_call(["git", "clone", cookbook['repo_url'], "."],
+                        cwd=path, stdout=f, stderr=f)
+
+                if not force_update and cookbook['commit_hash']:
+                    subprocess.check_call(["git", "reset", "--hard", cookbook['commit_hash']],
+                        cwd=path, stdout=f, stderr=f)
 
             print "%s %s..........%sDONE%s" % (message, cookbook['install_path'], GREEN, END,)
         except CalledProcessError:
@@ -136,7 +168,6 @@ def purge_cookbooks():
                     shutil.rmtree(path)
                 except OSError:
                     print "%sFailed to delete %s%s" % (RED, dirs, END,)
-
 
 def read_manifest():
     try:
