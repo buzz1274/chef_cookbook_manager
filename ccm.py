@@ -18,7 +18,7 @@ class CCMExceptpion(Exception):
 
 def main():
     parser = OptionParser()
-    parser.add_option("-c", "--create", dest="create", metavar="FOLDER",
+    parser.add_option("-s", "--snapshot", dest="snapshot", metavar="FOLDER",
                       help="create a ccm.json manifest with cookbooks "\
                            "installed in the supplied folder.")
     parser.add_option("-i", "--install", action="store_true", dest="install",
@@ -32,8 +32,8 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    if options.create:
-        create_manifest(options.create)
+    if options.snapshot:
+        snaphsot_manifest(options.create)
     elif options.install:
         update_cookbooks()
     elif options.update:
@@ -44,11 +44,16 @@ def main():
         print "%sPlease supply a valid argument%s" % (RED, END,)
         parser.print_help()
 
-def create_manifest(folder):
+def snaphsot_manifest(folder):
     """
-    create a cookbook manifest containg name and repo url
-    each cookbook used.
+    snapshot a cookbook manifest containg name, repo url and
+    commit id each cookbook used.
     """
+
+    #snapshot cookbook with commit id which will be used for git clone
+        #when git update is run update all repos but do not write ccm.json
+        #rollback cookbooks to version in ccm.json
+
     folder = folder.strip('/')
 
     if not os.path.exists(folder):
